@@ -1,6 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const cors = require('cors');
 
 const app = express();
@@ -8,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.json({ status: "API is running successfully!" });
+  res.json({ status: "Pinterest API is running!" });
 });
 
 app.get('/download', async (req, res) => {
@@ -18,46 +17,33 @@ app.get('/download', async (req, res) => {
   }
 
   try {
-    // Pinterest නිල නොවන පබ්ලික් ඇප් එකක API එකක් හරහා දත්ත ලබා ගැනීම
-    const encodedUrl = encodeURIComponent(pinUrl);
-    const apiResult = await axios.get(`https://www.pinterest.com/resource/PinResource/get/?source_url=${encodedUrl}&data={"slug":"${pinUrl.split('/')[4] || ''}"}`, {
+    // නොමිලේ ලබා ගත හැකි නිදහස් පබ්ලික් සර්විස් එකක් හරහා ඩේටා ලබා ගැනීම
+    const response = await axios.get(`https://pinterest-video-downloader.vercel.app/api?url=${encodeURIComponent(pinUrl)}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
     });
 
-    // විකල්ප ක්‍රමයක් ලෙස HTML වෙතින්ම ඩේටා ලබා ගැනීම
-    const response = await axios.get(pinUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
-      }
-    });
-
-    const $ = cheerio.load(response.data);
-    let videoUrl = null;
-
-    // JSON-LD හෝ meta ටැග් වලින් වීඩියෝව සෙවීම
-    $('script').each((i, el) => {
-      try {
-        const text = $(el).html();
-        if (text && text.includes('contentUrl')) {
-          const json = JSON.parse(text);
-          if (json.contentUrl) {
-            videoUrl = json.contentUrl;
-          }
-        }
-      } catch (e) {}
-    });
-
-    if (!videoUrl) {
-      videoUrl = $('meta[property="og:video"]').attr('content') || 
-                 $('meta[property="og:video:secure_url"]').attr('content');
-    }
-
-    if (videoUrl) {
+    if (response.data && (response.data.url || response.data.download_url)) {
+      const videoUrl = response.data.url || response.data.download_url;
       res.json({ success: true, download_url: videoUrl });
     } else {
-      res.status(404).json({ error: "Could not extract video. Pinterest has strong security." });
+      // වෙනත් විකල්ප ක්‍රමයක් (Cobalt API වැනි නිදහස් සේවාවක්) පාවිච්චි කිරීම
+      const cobaltResp = await axios.post('https://api.cobalt.tools/api/json', {
+        url: pinUrl
+      }, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0'
+        }
+      });
+
+      if (cobaltResp.data && cobaltResp.data.url) {
+        res.json({ success: true, download_url: cobaltResp.data.url });
+      } else {
+        res.status(404).json({ error: "Could not fetch video. Try another link." });
+      }
     }
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch video", details: err.message });
