@@ -3,21 +3,20 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.json({ status: "Pinterest API is running perfectly!" });
+  res.json({ status: "API is working fine!" });
 });
 
 app.get('/download', async (req, res) => {
   const pinUrl = req.query.url;
   if (!pinUrl) {
-    return res.status(400).json({ error: "Please provide a Pinterest URL using ?url=" });
+    return res.status(400).json({ success: false, error: "Please provide a Pinterest URL using ?url=" });
   }
 
   try {
-    // Cobalt API හරහා ස්ථාවරව සහ වේගයෙන් වීඩියෝ ලින්ක් එක ලබා ගැනීම
     const response = await axios.post('https://api.cobalt.tools/api/json', {
       url: pinUrl,
       vQuality: 'max'
@@ -25,14 +24,12 @@ app.get('/download', async (req, res) => {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        'User-Agent': 'Mozilla/5.0'
       }
     });
 
     if (response.data) {
       let downloadUrl = response.data.url;
-      
-      // බහු සේවා (picker) තිබේ නම් පළමු එක ලබා ගැනීම
       if (!downloadUrl && response.data.picker && response.data.picker.length > 0) {
         downloadUrl = response.data.picker[0].url;
       }
@@ -42,9 +39,9 @@ app.get('/download', async (req, res) => {
       }
     }
 
-    res.status(404).json({ error: "Could not fetch video. Please check the link." });
+    return res.status(404).json({ success: false, error: "Could not fetch video. Try another link." });
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch video", details: err.message });
+    return res.status(500).json({ success: false, error: "Failed to fetch video", details: err.message });
   }
 });
 
